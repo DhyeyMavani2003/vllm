@@ -1,16 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import numpy as np
 from numba import jit
 
-from vllm.config import VllmConfig
+if TYPE_CHECKING:
+    from vllm.config import VllmConfig
 
 
 class NgramProposer:
 
-    def __init__(self, vllm_config: VllmConfig):
+    def __init__(self, vllm_config: 'VllmConfig'):
         assert vllm_config.speculative_config is not None
         assert vllm_config.speculative_config.prompt_lookup_min is not None
         assert vllm_config.speculative_config.prompt_lookup_max is not None
