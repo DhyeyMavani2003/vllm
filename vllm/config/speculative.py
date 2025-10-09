@@ -118,6 +118,11 @@ class SpeculativeConfig:
     prompt_lookup_min: Optional[int] = None
     """Minimum size of ngram token window when using Ngram proposer, if
     provided. Defaults to 1."""
+    ngram_recency_bias: bool = False
+    """Enable recency bias for n-gram matching. When True, prefer the most 
+    recent (last) match instead of the first match when multiple n-grams of 
+    the same length are found. This can improve acceptance rates for dialogue, 
+    code, and instruction-following tasks where recent context is more predictive."""
 
     speculative_token_tree: Optional[str] = None
     """Specifies the tree structure for speculative token generation.

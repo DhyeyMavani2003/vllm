@@ -24,6 +24,9 @@ class NgramProposer:
         self.k = vllm_config.speculative_config.num_speculative_tokens
         # Maximum length of the model.
         self.max_model_len = vllm_config.model_config.max_model_len
+        
+        # Recency bias configuration
+        self.use_recency_bias = vllm_config.speculative_config.ngram_recency_bias
 
         # Pre-allocate buffers for numba batch propose.
         max_num_seqs = vllm_config.scheduler_config.max_num_seqs
@@ -114,6 +117,7 @@ class NgramProposer:
                 self.k,
                 self.valid_ngram_draft,
                 self.valid_ngram_num_drafts,
+                self.use_recency_bias,
             )
 
             # Restore original number of threads.
@@ -183,6 +187,7 @@ def batch_propose_numba(
     k: int,
     valid_ngram_draft: np.ndarray,
     valid_ngram_num_drafts: np.ndarray,
+    use_recency_bias: bool,
 ):
     for i in prange(len(valid_ngram_requests)):
         idx = valid_ngram_requests[i]
@@ -194,6 +199,7 @@ def batch_propose_numba(
             max_ngram=max_n,
             max_model_len=max_model_len,
             k=k,
+            use_recency_bias=use_recency_bias,
         )
 
         valid_ngram_num_drafts[i] = drafter_output.shape[0]
@@ -208,12 +214,22 @@ def _find_longest_matched_ngram_and_propose_tokens(
     max_ngram: int,
     max_model_len: int,
     k: int,
+    use_recency_bias: bool = False,
 ) -> np.ndarray:
     """
     Find the longest n-gram which matches the suffix of the given tokens
     whose length is within [min_ngram, max_ngram] (inclusive).
 
     If found, we will extract k right after the matched ngram.
+    
+    Args:
+        origin_tokens: The token sequence to search in.
+        min_ngram: Minimum n-gram length to match.
+        max_ngram: Maximum n-gram length to match.
+        max_model_len: Maximum model length.
+        k: Number of tokens to propose after the match.
+        use_recency_bias: If True, prefer the most recent (last) match instead
+            of the first match when multiple n-grams of the same length are found.
     """
     # Do not generate draft tokens is context is shorter than minimum n-gram
     total_token = origin_tokens.shape[0]
@@ -252,13 +268,21 @@ def _find_longest_matched_ngram_and_propose_tokens(
             prev_lps += 1
             # Check if we found a longer valid ngram.
             #
-            # Update position when longest_ngram matched prev_lps,
-            # as we want to get the target n-gram of the earliest position
-            # in the original tokens (i.e.
-            # latest position in the reversed tokens)
-            if prev_lps >= longest_ngram:
-                longest_ngram = prev_lps
-                position = i
+            # Update position based on recency bias:
+            # - Without recency bias (use_recency_bias=False): prefer earliest
+            #   match (first occurrence in original tokens, i.e., latest in
+            #   reversed tokens), so use >= to update on equal length matches.
+            # - With recency bias (use_recency_bias=True): prefer most recent
+            #   match (last occurrence in original tokens, i.e., earliest in
+            #   reversed tokens), so use > to only update on strictly longer.
+            if use_recency_bias:
+                if prev_lps > longest_ngram:
+                    longest_ngram = prev_lps
+                    position = i
+            else:
+                if prev_lps >= longest_ngram:
+                    longest_ngram = prev_lps
+                    position = i
             if i < max_ngram:
                 # Store LPS for the first max_ngram prefix
                 lps[i] = prev_lps
