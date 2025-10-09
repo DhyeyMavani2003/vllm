@@ -1,0 +1,10 @@
+[
+  {
+    "chosen": "Human: Hello, how are you?\n\nAssistant: I'm doing well, thank you! How can I help you today?\n\nHuman: I need help with Python.\n\nAssistant: I'd be happy to help with Python! What specifically do you need assistance with?",
+    "rejected": "Human: Hello, how are you?\n\nAssistant: Fine."
+  },
+  {
+    "chosen": "Human: What is machine learning?\n\nAssistant: Machine learning is a subset of artificial intelligence that enables systems to learn and improve from experience without being explicitly programmed.",
+    "rejected": "Human: What is machine learning?\n\nAssistant: It's AI stuff."
+  }
+]
